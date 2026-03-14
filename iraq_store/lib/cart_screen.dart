@@ -31,16 +31,18 @@ class CartScreen extends StatelessWidget {
                     itemCount: cart.items.length,
                     itemBuilder: (ctx, i) {
                       final cartItem = cart.items.values.toList()[i];
+                      // الوصول إلى المنتج من خلال cartItem.product
+                      final product = cartItem.product;
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
                         child: Padding(
                           padding: const EdgeInsets.all(8),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundImage: NetworkImage(cartItem.imageUrl),
+                              backgroundImage: NetworkImage(product.imageUrl),
                             ),
-                            title: Text(cartItem.name),
-                            subtitle: Text('الإجمالي: ${cartItem.price * cartItem.quantity} د.ع'),
+                            title: Text(product.name),
+                            subtitle: Text('الإجمالي: ${product.price * cartItem.quantity} د.ع'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -85,7 +87,7 @@ class CartScreen extends StatelessWidget {
                           Chip(
                             label: Text(
                               '${cart.totalAmount.toStringAsFixed(0)} د.ع',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), // تم تصحيح الخطأ
                             ),
                             backgroundColor: Colors.green,
                           ),

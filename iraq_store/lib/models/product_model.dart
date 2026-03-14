@@ -1,7 +1,5 @@
-// lib/models/product_model.dart
-
-import 'package:pocketbase/pocketbase.dart'; // <--- أضف هذا الاستيراد
-import '../pocketbase_instance.dart';     // <--- أضف هذا الاستيراد للوصول إلى `pb`
+import 'package:pocketbase/pocketbase.dart';
+import '../pocketbase_instance.dart';
 
 class Product {
   final String id;
@@ -10,7 +8,7 @@ class Product {
   final double price;
   final String currency;
   final String imageUrl;
-  final String category;
+  final String categoryId;
   final double rating;
   final int stock;
 
@@ -21,44 +19,39 @@ class Product {
     required this.price,
     required this.currency,
     required this.imageUrl,
-    required this.category,
+    required this.categoryId,
     required this.rating,
     required this.stock,
   });
 
-  // (يمكنك الإبقاء على fromJson إذا كنت ستستخدمه لأغراض أخرى أو إزالته إذا كان PocketBase هو مصدرك الوحيد)
-  factory Product.fromJson(Map<String, dynamic> json) {
-    return Product(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
-      price: (json['price'] as num).toDouble(),
-      currency: json['currency'] as String,
-      imageUrl: json['imageUrl'] as String,
-      category: json['category'] as String,
-      rating: (json['rating'] as num).toDouble(),
-      stock: json['stock'] as int,
-    );
-  }
-
-  // <--- هنا تبدأ بإضافة الـ factory constructor الجديد
   factory Product.fromPocketBaseRecord(RecordModel record) {
     final json = record.data;
+
+    // دالة مساعدة للتعامل مع الحقول التي قد تكون قائمة (مثل حقول الملفات والعلاقات)
+    String _getFirstFromListOrString(dynamic data) {
+      if (data is List && data.isNotEmpty) {
+        return data.first as String? ?? '';
+      }
+      if (data is String) {
+        return data;
+      }
+      return '';
+    }
+
     return Product(
-      id: record.id, // جلب الـ ID مباشرة من RecordModel
-      name: json['name'] as String,
-      description: json['description'] as String,
-      price: (json['price'] as num).toDouble(),
-      currency: json['currency'] as String,
-      // بناء الـ URL للصورة باستخدام pb.getFileUrl
-      // تأكد أن 'image' هو اسم حقل الصورة في PocketBase
-      imageUrl: pb.getFileUrl(record, json['imageUrl'] as String).toString(),
-      category: json['category'] as String,
-      rating: (json['rating'] as num).toDouble(),
-      stock: json['stock'] as int,
+      id: record.id,
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num? ?? 0).toDouble(),
+      currency: json['currency'] as String? ?? '',
+      // التصحيح النهائي: استخدام اسم الحقل الصحيح 'imageUrl' من المخطط
+      imageUrl: pb.getFileUrl(record, _getFirstFromListOrString(json['imageUrl'])).toString(),
+      // التصحيح النهائي: استخدام اسم الحقل الصحيح 'categoryId' من المخطط
+      categoryId: _getFirstFromListOrString(json['categoryId']),
+      rating: (json['rating'] as num? ?? 0).toDouble(),
+      stock: json['stock'] as int? ?? 0,
     );
   }
-  // <--- هنا ينتهي الـ factory constructor الجديد
 
   Map<String, dynamic> toJson() {
     return {
@@ -68,7 +61,7 @@ class Product {
       'price': price,
       'currency': currency,
       'imageUrl': imageUrl,
-      'category': category,
+      'categoryId': categoryId,
       'rating': rating,
       'stock': stock,
     };

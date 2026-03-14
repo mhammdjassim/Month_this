@@ -5,9 +5,10 @@ import 'providers/product_provider.dart';
 import 'product_details_screen.dart';
 
 class CategoryProductsScreen extends StatelessWidget {
+  final String categoryId;
   final String categoryName;
 
-  const CategoryProductsScreen({super.key, required this.categoryName});
+  const CategoryProductsScreen({super.key, required this.categoryId, required this.categoryName});
 
   @override
   Widget build(BuildContext context) {
@@ -19,10 +20,14 @@ class CategoryProductsScreen extends StatelessWidget {
       ),
       body: Consumer<ProductProvider>(
         builder: (context, productProvider, child) {
-          // فلترة المنتجات بناءً على اسم القسم
+          // فلترة المنتجات بناءً على معرف القسم
           final products = productProvider.allProducts
-              .where((p) => p.category == categoryName)
+              .where((p) => p.categoryId == categoryId)
               .toList();
+
+          if (productProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           if (products.isEmpty) {
             return const Center(

@@ -16,6 +16,8 @@ dependencies:
   pocketbase: ^0.18.0
   provider: ^6.0.5
   cupertino_icons: ^1.0.8
+  connectivity_plus: ^6.0.3
+  google_sign_in: ^6.2.1
 
 dev_dependencies:
   flutter_test:

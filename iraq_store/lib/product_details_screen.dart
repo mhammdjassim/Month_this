@@ -31,9 +31,25 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       _reviewsFuture = _reviewService.getReviewsForProduct(widget.product.id);
     });
   }
+  
+  String _getRatingText(int rating) {
+    switch (rating) {
+      case 1:
+        return 'سيئ';
+      case 2:
+        return 'مقبول';
+      case 3:
+        return 'جيد';
+      case 4:
+        return 'جيد جداً';
+      case 5:
+        return 'ممتاز';
+      default:
+        return '';
+    }
+  }
 
   void _showAddReviewSheet(BuildContext context) {
-    final commentController = TextEditingController();
     int currentRating = 3;
 
     showModalBottomSheet(
@@ -73,13 +89,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       );
                     }),
                   ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: commentController,
-                    decoration: const InputDecoration(labelText: 'اكتب تعليقك هنا...', border: OutlineInputBorder()),
-                    maxLines: 3,
+                  const SizedBox(height: 5),
+                  Center(
+                    child: Text(
+                      _getRatingText(currentRating),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                    ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 25),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -99,7 +116,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 productId: widget.product.id,
                                 userId: userId,
                                 rating: currentRating,
-                                comment: commentController.text,
+                                comment: '', // تم حذف التعليق
                               );
 
                               setModalState(() {
@@ -266,7 +283,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             final cart = context.read<CartProvider>();
             cart.addItem(widget.product);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('تمت إضافة المنتج إلى السلة بنجاح!')),
+              const SnackBar(content: Text('تمت إضافة المنتج إلى السلة بنجاح!')), 
             );
           },
           icon: const Icon(Icons.shopping_cart, color: Colors.white),
@@ -301,8 +318,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 );
               }),
             ),
-            const SizedBox(height: 5),
-            Text(comment),
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(comment),
+            ],
           ],
         ),
       ),

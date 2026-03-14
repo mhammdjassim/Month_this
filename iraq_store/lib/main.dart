@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -82,30 +83,58 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _pageController = PageController();
   Timer? _timer;
   int _currentPage = 0;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
-      if (_currentPage < 2) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          _currentPage,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeIn,
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> result) {
+      final hasConnection = result.contains(ConnectivityResult.mobile) || result.contains(ConnectivityResult.wifi);
+      if (!hasConnection) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('أنت غير متصل بالإنترنت'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     });
+
+    // جلب البيانات عند بدء التشغيل
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProductProvider>().fetchHomeData().then((_) {
+        // بدء المؤقت بعد جلب البيانات
+        _startBannerTimer(context.read<ProductProvider>());
+      });
+    });
+  }
+
+  void _startBannerTimer(ProductProvider productProvider) {
+    _timer?.cancel(); // إلغاء أي مؤقت موجود
+    if (productProvider.banners.isNotEmpty) {
+      _timer = Timer.periodic(const Duration(seconds: 2), (Timer timer) {
+        if (_currentPage < (productProvider.banners.length - 1)) {
+          _currentPage++;
+        } else {
+          _currentPage = 0;
+        }
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            _currentPage,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeIn,
+          );
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();
+    _connectivitySubscription.cancel();
     super.dispose();
   }
 
@@ -165,11 +194,11 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.favorite),
+            leading: const Icon(Icons.favorite, color: Colors.red),
             title: Text(AppLocalizations.of(context).translate('favorites')),
             onTap: () {
-              _onItemTapped(2);
               Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const FavoritesScreen()));
             },
           ),
            ListTile(
@@ -201,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return _buildCategoriesContent(productProvider.categories);
       case 2:
-        return const FavoritesScreen();
+        return const CartScreen();
       case 3:
         return authProvider.isLoggedIn ? _buildProfileContent(authProvider) : const LoginScreen();
       default:
@@ -217,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
-            _buildPageViewBanner(),
+            _buildPageViewBanner(productProvider),
             const SizedBox(height: 20),
             _buildProductSectionHeader(AppLocalizations.of(context).translate('new_arrivals'), productProvider.newArrivals),
             _buildProductScrollList(productProvider.newArrivals),
@@ -237,42 +266,56 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPageViewBanner() {
-    final List<String> bannerImages = [
-      'assets/images/banner1.jpg',
-      'assets/images/banner2.jpg',
-      'assets/images/banner3.jpg',
-    ];
+  Widget _buildPageViewBanner(ProductProvider productProvider) {
+    final banners = productProvider.banners;
+
+    if (banners.isEmpty) {
+      return const SizedBox(height: 180, child: Center(child: Text('لا توجد إعلانات حالياً')));
+    }
 
     return SizedBox(
       height: 180,
       child: PageView.builder(
         controller: _pageController,
-        itemCount: bannerImages.length,
+        itemCount: banners.length,
         itemBuilder: (context, index) {
+          final banner = banners[index];
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-            decoration: BoxDecoration(
+            child: ClipRRect(
               borderRadius: BorderRadius.circular(15.0),
-              image: DecorationImage(
-                image: AssetImage(bannerImages[index]),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton(
-                  onPressed: () => _onItemTapped(1),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    banner.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                    ),
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return const Center(child: CircularProgressIndicator(color: Colors.green));
+                    },
+                  ),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: ElevatedButton(
+                        onPressed: () => _onItemTapped(1),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        child: Text(AppLocalizations.of(context).translate('shop_now'), style: const TextStyle(color: Colors.white)),
+                      ),
                     ),
                   ),
-                  child: Text(AppLocalizations.of(context).translate('shop_now'), style: TextStyle(color: Colors.white)),
-                ),
+                ],
               ),
             ),
           );
@@ -288,9 +331,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return GridView.builder(
       padding: const EdgeInsets.all(16.0),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisCount: 4,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
         childAspectRatio: 0.9,
       ),
       itemCount: categories.length,
@@ -301,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => CategoryProductsScreen(categoryName: category.name),
+                builder: (context) => CategoryProductsScreen(categoryId: category.id, categoryName: category.name),
               ),
             );
           },
@@ -323,11 +366,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.all(4.0),
                     child: Image.network(
                       category.iconUrl,
                       fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => const Icon(Icons.category, size: 40, color: Colors.grey),
+                      errorBuilder: (c, e, s) => const Icon(Icons.category, size: 30, color: Colors.grey),
                     ),
                   ),
                 ),
@@ -337,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     category.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
@@ -413,14 +456,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildErrorView(String message) {
-    String displayMessage = message;
-    if (message.contains('SocketException') || 
-        message.contains('refused') || 
-        message.contains('Failed host lookup') ||
-        message.contains('Connection timed out')) {
-      displayMessage = 'أنت غير متصل بالإنترنت';
-    }
-
+    String displayMessage = 'أنت غير متصل بالإنترنت';
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -497,22 +534,6 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const FavoritesScreen()),
-              );
-            },
-          ),
-        ),
-        Consumer<CartProvider>(
-          builder: (ctx, cart, ch) => Badge(
-            label: Text(cart.itemCount.toString()),
-            isLabelVisible: cart.itemCount > 0,
-            child: ch,
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CartScreen()),
               );
             },
           ),
@@ -798,19 +819,25 @@ class _HomeScreenState extends State<HomeScreen> {
     return BottomNavigationBar(
       items: <BottomNavigationBarItem>[
         BottomNavigationBarItem(
-          icon: Icon(Icons.home),
+          icon: const Icon(Icons.home),
           label: AppLocalizations.of(context).translate('home'),
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.category),
+          icon: const Icon(Icons.category),
           label: AppLocalizations.of(context).translate('categories'),
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.favorite_border),
-          label: AppLocalizations.of(context).translate('favorites'),
+          icon: Consumer<CartProvider>(
+            builder: (ctx, cart, _) => Badge(
+              label: Text(cart.itemCount.toString()),
+              isLabelVisible: cart.itemCount > 0,
+              child: const Icon(Icons.shopping_cart),
+            ),
+          ),
+          label: AppLocalizations.of(context).translate('cart'),
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.person),
+          icon: const Icon(Icons.person),
           label: AppLocalizations.of(context).translate('my_account'),
         ),
       ],
@@ -831,17 +858,40 @@ class ProductSearchDelegate extends SearchDelegate<String> {
 
   ProductSearchDelegate({required this.products});
 
-  @override
+ @override
   List<Widget>? buildActions(BuildContext context) {
     return [
       IconButton(
+        tooltip: 'بحث بالذكاء الاصطناعي',
+        icon: const Icon(Icons.auto_awesome),
+        onPressed: () {
+          showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: const Text("بحث بالذكاء الاصطناعي"),
+                    content: const Text("قريباً! ستتمكن من وصف ما تتخيله لنجد لك أفضل المنتجات."),
+                    actions: [
+                      TextButton(
+                        child: const Text("موافق"),
+                        onPressed: () => Navigator.of(context).pop(),
+                      )
+                    ],
+                  ));
+        },
+      ),
+      IconButton(
         icon: const Icon(Icons.clear),
         onPressed: () {
-          query = '';
+          if (query.isEmpty) {
+            close(context, '');
+          } else {
+            query = '';
+          }
         },
       ),
     ];
   }
+
 
   @override
   Widget? buildLeading(BuildContext context) {
@@ -892,5 +942,5 @@ class ProductSearchDelegate extends SearchDelegate<String> {
   }
   
   @override
-  String get searchFieldLabel => 'ابحث عن منتج...';
+  String get searchFieldLabel => 'ابحث عن منتج أو صف ما تتخيله...';
 }
